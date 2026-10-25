@@ -1,0 +1,303 @@
+ <!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form Nota Kulakan</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background-color: #f1f5f9; padding: 15px; color: #334155; }
+    .box { background: white; padding: 15px; border-radius: 8px; border: 1px solid #cbd5e1; margin-bottom: 15px; }
+    .title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #1e293b; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+    label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 3px; color: #475569; }
+    input, select, textarea { width: 100%; padding: 8px; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 5px; background: #fff; }
+    .item-card { background: #f8fafc; border: 1px solid #94a3b8; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .btn { display: inline-block; padding: 10px 15px; font-size: 13px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; text-align: center; }
+    .btn-tambah { background: #4338ca; color: white; width: 100%; margin-top: 5px; font-size: 14px; }
+    .btn-hapus { background: #ef4444; color: white; padding: 4px 8px; font-size: 11px; float: right; border-radius: 4px; }
+    .btn-simpan { background: #10b981; color: white; width: 100%; font-size: 16px; padding: 12px; margin-top: 10px; }
+    .btn-reset { background: #94a3b8; color: white; padding: 12px; margin-top: 10px; }
+    .total-display { background: #0f172a; color: #38bdf8; padding: 12px; font-size: 20px; font-weight: bold; border-radius: 6px; text-align: right; }
+  </style>
+</head>
+<body>
+
+  <h2 style="text-align: center; margin-bottom: 15px;">📋 Form Input Nota Kulakan</h2>
+
+  <!-- Config GAS -->
+  <div class="box" style="background: #fffbeb; border-color: #fde68a;">
+    <label style="color: #b45309;">🔗 URL Google Apps Script:</label>
+    <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec">
+  </div>
+
+  <form id="notaForm" onsubmit="return false;">
+    
+    <!-- Header Nota -->
+    <div class="box">
+      <div class="title">🧾 Header Nota</div>
+      <div class="grid">
+        <div>
+          <label>No. Nota / Faktur</label>
+          <input type="text" id="noNota">
+        </div>
+        <div>
+          <label>Tanggal Belanja</label>
+          <input type="date" id="tglNota">
+        </div>
+        <div>
+          <label>Nama Supplier</label>
+          <input type="text" id="supplier" placeholder="Contoh: Toko Grosir">
+        </div>
+        <div>
+          <label>Metode Bayar</label>
+          <select id="metodeBayar">
+            <option value="Tunai">Tunai</option>
+            <option value="Transfer">Transfer</option>
+            <option value="Tempo">Tempo / Hutang</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daftar Barang -->
+    <div class="box">
+      <div class="title">📦 Barang Belanjaan</div>
+      
+      <div id="containerBarang"></div>
+
+      <button type="button" class="btn btn-tambah" id="btnTambahBarang" onclick="tambahBarang()">+ TAMBAH BARANG LAGI</button>
+    </div>
+
+    <!-- Catatan & Total -->
+    <div class="box">
+      <label>Catatan</label>
+      <textarea id="catatan" rows="2" placeholder="Catatan tambahan..."></textarea>
+      <div style="margin-top: 10px;">
+        <label>TOTAL NOTA BELANJA:</label>
+        <div class="total-display" id="displayTotal">Rp 0</div>
+      </div>
+    </div>
+
+    <!-- Tombol Aksi -->
+    <div class="grid" style="grid-template-columns: 1fr 2fr;">
+      <button type="button" class="btn btn-reset" onclick="resetForm()">🔄 Reset</button>
+      <button type="button" class="btn btn-simpan" id="btnSimpan" onclick="simpanKeGoogleSheet()">☁️ Simpan ke Google Sheet</button>
+    </div>
+
+  </form>
+
+  <script>
+    var countBarang = 0;
+
+    function tambahBarang() {
+      countBarang++;
+      var id = countBarang;
+      var container = document.getElementById('containerBarang');
+
+      var div = document.createElement('div');
+      div.id = 'item-' + id;
+      div.className = 'item-card';
+
+      div.innerHTML = 
+        '<button type="button" class="btn btn-hapus" onclick="hapusBarang(' + id + ')">🗑️ Hapus</button>' +
+        '<div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4338ca;">Item #' + id + '</div>' +
+        
+        '<div style="margin-bottom: 8px;">' +
+          '<label>Nama Barang</label>' +
+          '<input type="text" id="namaBarang-' + id + '" placeholder="Nama barang...">' +
+        '</div>' +
+
+        '<div class="grid" style="margin-bottom: 8px;">' +
+          '<div>' +
+            '<label>Harga Beli Nota (Rp)</label>' +
+            '<input type="number" id="hargaBeliTotal-' + id + '" oninput="hitungRow(' + id + ')" placeholder="0">' +
+          '</div>' +
+          '<div>' +
+            '<label>Qty (Dus/Pak)</label>' +
+            '<input type="number" id="qtyDus-' + id + '" oninput="hitungRow(' + id + ')" value="1" min="1">' +
+          '</div>' +
+          '<div>' +
+            '<label>Isi/Dus (Pcs)</label>' +
+            '<input type="number" id="isiPerDus-' + id + '" oninput="hitungRow(' + id + ')" value="12" min="1">' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="grid" style="background: #e2e8f0; padding: 8px; border-radius: 5px; margin-bottom: 8px;">' +
+          '<div>' +
+            '<label>Total Pcs</label>' +
+            '<input type="number" id="totalQtyPcs-' + id + '" readonly style="background: #fff; font-weight: bold;">' +
+          '</div>' +
+          '<div>' +
+            '<label>HPP / Pcs (Rp)</label>' +
+            '<input type="text" id="hppPerPcs-' + id + '" readonly style="background: #fff; font-weight: bold; color: #4338ca;">' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="grid">' +
+          '<div>' +
+            '<label>Margin (%)</label>' +
+            '<input type="number" id="marginPercent-' + id + '" oninput="hitungRow(' + id + ')" value="10">' +
+          '</div>' +
+          '<div>' +
+            '<label>Rekomendasi (500)</label>' +
+            '<input type="text" id="rekomendasiJual-' + id + '" readonly style="background: #fef3c7; color: #92400e; font-weight: bold;">' +
+          '</div>' +
+          '<div>' +
+            '<label>Harga Jual Final (Rp)</label>' +
+            '<input type="number" id="hargaJualFinal-' + id + '" placeholder="0" style="background: #ecfdf5; font-weight: bold; color: #065f46;">' +
+          '</div>' +
+        '</div>';
+
+      container.appendChild(div);
+      hitungRow(id);
+    }
+
+    function hapusBarang(id) {
+      var el = document.getElementById('item-' + id);
+      if (el) {
+        el.parentNode.removeChild(el);
+        hitungTotalNota();
+      }
+    }
+
+    function hitungRow(id) {
+      var qtyDus = parseFloat(document.getElementById('qtyDus-' + id).value) || 0;
+      var isiPerDus = parseFloat(document.getElementById('isiPerDus-' + id).value) || 0;
+      var hargaBeliTotal = parseFloat(document.getElementById('hargaBeliTotal-' + id).value) || 0;
+      var marginPercent = parseFloat(document.getElementById('marginPercent-' + id).value) || 0;
+
+      var totalQtyPcs = qtyDus * isiPerDus;
+      document.getElementById('totalQtyPcs-' + id).value = totalQtyPcs;
+
+      var hpp = 0;
+      if (totalQtyPcs > 0 && hargaBeliTotal > 0) {
+        hpp = hargaBeliTotal / totalQtyPcs;
+      }
+      document.getElementById('hppPerPcs-' + id).value = Math.round(hpp).toLocaleString('id-ID');
+
+      var rekomendasi = hpp * (1 + (marginPercent / 100));
+      var pembulatan = Math.ceil(rekomendasi / 500) * 500;
+      
+      document.getElementById('rekomendasiJual-' + id).value = pembulatan.toLocaleString('id-ID');
+      
+      var fieldFinal = document.getElementById('hargaJualFinal-' + id);
+      if (!fieldFinal.value || fieldFinal.getAttribute('data-auto') === "true") {
+        fieldFinal.value = pembulatan;
+        fieldFinal.setAttribute('data-auto', 'true');
+      }
+
+      hitungTotalNota();
+    }
+
+    function hitungTotalNota() {
+      var total = 0;
+      var inputs = document.querySelectorAll('[id^="hargaBeliTotal-"]');
+      for (var i = 0; i < inputs.length; i++) {
+        total += parseFloat(inputs[i].value) || 0;
+      }
+      document.getElementById('displayTotal').innerText = 'Rp ' + total.toLocaleString('id-ID');
+      return total;
+    }
+
+    function simpanKeGoogleSheet() {
+      var scriptUrl = document.getElementById('scriptUrl').value.trim();
+      if (!scriptUrl) {
+        alert('Mohon isi URL Google Apps Script terlebih dahulu di kotak paling atas!');
+        return;
+      }
+
+      localStorage.setItem('gas_script_url', scriptUrl);
+
+      var supplier = document.getElementById('supplier').value.trim();
+      if (!supplier) {
+        alert('Mohon isi nama Supplier!');
+        return;
+      }
+
+      var header = {
+        noNota: document.getElementById('noNota').value,
+        tanggal: document.getElementById('tglNota').value,
+        supplier: supplier,
+        metodeBayar: document.getElementById('metodeBayar').value,
+        catatan: document.getElementById('catatan').value,
+        totalPembelian: hitungTotalNota()
+      };
+
+      var items = [];
+      var itemDivs = document.querySelectorAll('.item-card');
+      
+      for (var i = 0; i < itemDivs.length; i++) {
+        var rawId = itemDivs[i].id.split('-')[1];
+        var namaBarang = document.getElementById('namaBarang-' + rawId).value.trim();
+        
+        if (namaBarang) {
+          items.push({
+            namaBarang: namaBarang,
+            hargaBeliTotal: parseFloat(document.getElementById('hargaBeliTotal-' + rawId).value) || 0,
+            qtyDus: parseFloat(document.getElementById('qtyDus-' + rawId).value) || 0,
+            isiPerDus: parseFloat(document.getElementById('isiPerDus-' + rawId).value) || 0,
+            totalQtyPcs: parseFloat(document.getElementById('totalQtyPcs-' + rawId).value) || 0,
+            hppPerPcs: parseFloat(document.getElementById('hppPerPcs-' + rawId).value.replace(/\./g, '')) || 0,
+            marginPercent: parseFloat(document.getElementById('marginPercent-' + rawId).value) || 0,
+            rekomendasiJual: parseFloat(document.getElementById('rekomendasiJual-' + rawId).value.replace(/\./g, '')) || 0,
+            hargaJualFinal: parseFloat(document.getElementById('hargaJualFinal-' + rawId).value) || 0
+          });
+        }
+      }
+
+      if (items.length === 0) {
+        alert('Mohon isi minimal 1 Nama Barang!');
+        return;
+      }
+
+      var btn = document.getElementById('btnSimpan');
+      btn.disabled = true;
+      btn.innerText = '⌛ Menyimpan...';
+
+      fetch(scriptUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ header: header, items: items })
+      })
+      .then(function() {
+        alert('Data Nota Kulakan berhasil dikirim ke Google Sheet!');
+        resetForm();
+      })
+      .catch(function(err) {
+        console.error(err);
+        alert('Gagal mengirim data. Periksa koneksi internet atau URL Apps Script Anda.');
+      })
+      .finally(function() {
+        btn.disabled = false;
+        btn.innerText = '☁️ Simpan ke Google Sheet';
+      });
+    }
+
+    function resetForm() {
+      document.getElementById('notaForm').reset();
+      document.getElementById('containerBarang').innerHTML = '';
+      var today = new Date().toISOString().split('T')[0];
+      document.getElementById('tglNota').value = today;
+      document.getElementById('noNota').value = 'NT-' + Date.now().toString().slice(-6);
+      countBarang = 0;
+      tambahBarang();
+      hitungTotalNota();
+    }
+
+    window.onload = function() {
+      var today = new Date().toISOString().split('T')[0];
+      document.getElementById('tglNota').value = today;
+      document.getElementById('noNota').value = 'NT-' + Date.now().toString().slice(-6);
+      
+      var savedUrl = localStorage.getItem('gas_script_url');
+      if (savedUrl) {
+        document.getElementById('scriptUrl').value = savedUrl;
+      }
+
+      tambahBarang();
+    };
+  </script>
+</body>
+</html>
